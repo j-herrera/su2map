@@ -1,4 +1,4 @@
-# Copyright 2017 Javier Herrera Montojo
+# Copyright 2017-2020 Javier Herrera Montojo
 # j.herrera.montojo@gmail.com
 
 # Imports
@@ -16,10 +16,8 @@ if len(sys.argv) != 4:
 	sys.exit()
 
 # Read flow
-reader = vtk.vtkUnstructuredGridReader()
+reader = vtk.vtkXMLUnstructuredGridReader()
 reader.SetFileName(sys.argv[1])
-reader.ReadAllScalarsOn()
-reader.ReadAllVectorsOn()
 reader.Update()
 
 data = reader.GetOutput()
@@ -44,7 +42,7 @@ cells = {}
 for i in range(nelem):
 	ln = p_su2.readline()
 	cells[i] = np.array(np.fromstring(ln, dtype=np.int, sep=' '))
-	
+
 ln = p_su2.readline()
 npoin = int(ln.split('=')[1])
 
@@ -73,15 +71,15 @@ for i in range(nelem):
     for j in range(cells[i].size-2):
         idlist.InsertNextId(cells[i][j+1])
     mcells.InsertNextCell(idlist)
-    
+
 
 new_mesh.SetPoints(mpoints)
 new_mesh.SetCells(cells[i][0], mcells)
 
 # Probe
 probe = vtk.vtkProbeFilter()
-probe.SetInput(new_mesh)
-probe.SetSource(data)
+probe.SetInputData(new_mesh)
+probe.SetSourceData(data)
 probe.Update()
 
 probe_data = probe.GetOutputDataObject(0).GetPointData()
@@ -104,33 +102,40 @@ for name in arrays:
                     neighbours.append(np.int(cell.GetPointId(k)))
         neighbours = np.unique(neighbours)
         abstract[name][i] = np.sum(abstract[name][neighbours])/len(neighbours)
-            
+
 # Export
 pos = open(sys.argv[3], "w")
-pos.write('"PointID" ')
-pos.write('"x" ')
-pos.write('"y" ')
+pos.write('"PointID"')
+pos.write(', "x"')
+pos.write(', "y"')
 if (ndim==3):
-    pos.write('"z" ')
+    pos.write(', "z"')
 
 for name in arrays:
-	pos.write('"'+name+'" ')
+	n_elem = abstract[name][0].size
+	if n_elem == 1:
+		pos.write(', "'+name+'"')
+	else:
+		pos.write(', "'+name+'_x"')
+		pos.write(', "'+name+'_y"')
+		if (ndim==3):
+			pos.write(', "'+name+'_z"')
 pos.write('\n')
 
 for i in range(npoin):
 	pos.write(str(i))
-	for j in range(ndim):
-		pos.write(' ' + str(points[i,j]))
+	pos.write(', ' + str(points[i,0]))
+	for j in range(1, ndim):
+		pos.write(', ' + str(points[i,j]))
 	for name in arrays:
-		pos.write('{:e}'.format(abstract[name][i]))
-		pos.write(' ')
+		n_elem = abstract[name][0].size
+		if n_elem == 1:
+			pos.write(', {:e}'.format(abstract[name][i]))
+		else:
+			for k in range(ndim):
+				pos.write(', {:e}'.format(abstract[name][i][k]))
 	pos.write('\n')
 
 pos.write('\n')
 
 pos.close()
-
-	
-
-
-
